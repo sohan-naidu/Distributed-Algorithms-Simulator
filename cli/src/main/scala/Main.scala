@@ -7,10 +7,13 @@ import com.typesafe.scalalogging.LazyLogging
 import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters.*
 
+import enricher.Enricher
+
 sealed trait Command
 object Command {
   final case class Generate(configPath: String, jarPath: String,
                             minimumMemory: Int, maximumMemory: Int, clearFlag: Boolean) extends Command
+  final case class Enrich(inputPath:String, outputPath: String, clearFlag: Boolean) extends Command
 }
 
 object Main extends CommandApp(
@@ -50,20 +53,35 @@ object CommandLineInterface extends LazyLogging {
       help = "Maximum memory allocation (in GB)"
     ).withDefault(4)
 
-  val generate: Opts[Command] =
+  private val enricherInputPath: Opts[String] =
+    Opts.option[String](
+      "input",
+      help = "Input path for the enricher"
+    ).withDefault("output/generated/generated.ngs")
+
+  private val enricherOutputPath: Opts[String] =
+    Opts.option[String](
+      "output",
+      help = "Output path for the enricher"
+    ).withDefault("output/enriched/enriched.sim")
+
+  private val generate: Opts[Command] =
     Opts.subcommand("generate", "Generate a graph using NetGameSim") {
       (generatorConfig, generatorJarPath, minimumMemory, maximumMemory, clearFlag)
         .mapN(Command.Generate.apply)
     }
 
+  private val enrich: Opts[Command] =
+    Opts.subcommand("enrich", "Enrich the graph by adding edge labels and a probability distribution" +
+      "function for each node") {
+      (enricherInputPath, enricherOutputPath, clearFlag).mapN(Command.Enrich.apply)
+    }
+
   private val command: Opts[Command] =
-    generate
+    generate.orElse(enrich)
 
   def run: Opts[Unit] = command.map {
     case Command.Generate(configPath, jarPath, minimumMemory, maximumMemory, clearFlag) =>
-      if (clearFlag) {
-        clear()
-      }
       logger.info(s"Running generator with params config=$configPath, jar=$jarPath, memory alloc between " +
         s"${minimumMemory}GB and ${maximumMemory}GB")
       val root = sys.props("user.dir")
@@ -83,6 +101,12 @@ object CommandLineInterface extends LazyLogging {
       if (exitCode != 0) {
         logger.error(s"Generator failed with exit code $exitCode")
       }
+
+    case Command.Enrich(inputPath, outputPath, clearFlag) =>
+      if (clearFlag) {
+        clear()
+      }
+      Enricher.run(inputPath, outputPath)
   }
 
   private def clear(): Unit = {
