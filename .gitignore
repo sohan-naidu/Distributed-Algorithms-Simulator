@@ -11,3 +11,5 @@ project/project/
 project/target/
 .bsp/
 .scala-build/
+
+.env

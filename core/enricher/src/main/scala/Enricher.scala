@@ -1,7 +1,6 @@
 package enricher
 
 import com.typesafe.scalalogging.LazyLogging
-import enricher.GraphIO
 import core.Message
 
 object Enricher extends LazyLogging {

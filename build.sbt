@@ -1,6 +1,6 @@
 import scala.collection.Seq
 
-ThisBuild / scalaVersion := "3.2.2"
+ThisBuild / scalaVersion := "3.3.4"
 
 lazy val commonDependencies = Seq(
   "org.slf4j" % "slf4j-api" % "2.0.13",
@@ -16,7 +16,6 @@ lazy val commonDependencies = Seq(
 lazy val cli = (project in file("cli"))
   .dependsOn(core, enricher)
   .settings(
-    scalaVersion := "3.2.2",
     name := "simulator",
     libraryDependencies ++= commonDependencies ++ Seq("com.monovore" %% "decline" % "2.4.1")
   )
@@ -32,8 +31,17 @@ lazy val enricher = (project in file("core/enricher"))
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
   )
 
+lazy val translator = (project in file("core/translator"))
+  .dependsOn(core)
+  .settings(
+    libraryDependencies ++= commonDependencies ++ Seq(
+      "com.typesafe.akka" %% "akka-actor-typed" % "2.10.7",
+      "com.typesafe.akka" %% "akka-stream"      % "2.10.7"
+    )
+  )
+
 lazy val root = (project in file("."))
-  .aggregate(cli, core, enricher)
+  .aggregate(cli, core, enricher, translator)
   .settings(
     Compile / mainClass := (cli / Compile / mainClass).value
   )
