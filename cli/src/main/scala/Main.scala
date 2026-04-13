@@ -6,13 +6,12 @@ import com.typesafe.scalalogging.LazyLogging
 
 import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters.*
-
 import enricher.Enricher
+import core.ConfigReader
 
 sealed trait Command
 object Command {
-  final case class Generate(configPath: String, jarPath: String,
-                            minimumMemory: Int, maximumMemory: Int, clearFlag: Boolean) extends Command
+  final case class Generate(configPath: Option[String], clearFlag: Boolean) extends Command
   final case class Enrich(inputPath:String, outputPath: String, clearFlag: Boolean) extends Command
 }
 
@@ -29,29 +28,11 @@ object CommandLineInterface extends LazyLogging {
       help = "Clear the output directory"
     ).orFalse
 
-  private val generatorConfig: Opts[String] =
+  private val generatorConfig: Opts[Option[String]] =
     Opts.option[String](
       "config",
       help = "Path to generator config"
-    ).withDefault("configs/generator.conf")
-
-  private val generatorJarPath: Opts[String] =
-    Opts.option[String](
-      "jar",
-      help = "Path to NetGameSim jar file"
-    ).withDefault("core/generator/target/scala-3.2.2/netmodelsim.jar")
-
-  private val minimumMemory: Opts[Int] =
-    Opts.option[Int](
-      "min",
-      help = "Minimum memory allocation (in GB)"
-    ).withDefault(2)
-
-  private val maximumMemory: Opts[Int] =
-    Opts.option[Int](
-      "max",
-      help = "Maximum memory allocation (in GB)"
-    ).withDefault(4)
+    ).orNone
 
   private val enricherInputPath: Opts[String] =
     Opts.option[String](
@@ -67,7 +48,7 @@ object CommandLineInterface extends LazyLogging {
 
   private val generate: Opts[Command] =
     Opts.subcommand("generate", "Generate a graph using NetGameSim") {
-      (generatorConfig, generatorJarPath, minimumMemory, maximumMemory, clearFlag)
+      (generatorConfig, clearFlag)
         .mapN(Command.Generate.apply)
     }
 
@@ -81,20 +62,19 @@ object CommandLineInterface extends LazyLogging {
     generate.orElse(enrich)
 
   def run: Opts[Unit] = command.map {
-    case Command.Generate(configPath, jarPath, minimumMemory, maximumMemory, clearFlag) =>
-      logger.info(s"Running generator with params config=$configPath, jar=$jarPath, memory alloc between " +
-        s"${minimumMemory}GB and ${maximumMemory}GB")
-      val root = sys.props("user.dir")
+    case Command.Generate(configPath, clearFlag) =>
+      val genConfig = ConfigReader.getGeneratorConfig(configPath)
+      logger.info(s"Generating a graph...")
       val exitCode =
         Process(
           Seq(
             "java",
-            s"-Xms${minimumMemory}G",
-            s"-Xmx${maximumMemory}G",
-            s"-Dconfig.file=$configPath",
+            s"-Xms${genConfig.minMemory}G",
+            s"-Xmx${genConfig.maxMemory}G",
+            s"-Dconfig.file=${genConfig.NGSConfigPath}",
             "-jar",
-            s"$jarPath",
-            "generated"
+            s"${genConfig.jarPath}",
+            s"${genConfig.outputFileName}"
           )
         ).!
 

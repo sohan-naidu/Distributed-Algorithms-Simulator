@@ -10,7 +10,8 @@ lazy val commonDependencies = Seq(
   "org.scalameta" %% "munit-scalacheck" % "0.7.29" % Test,
   "io.circe" %% "circe-core"    % "0.14.6",
   "io.circe" %% "circe-generic" % "0.14.6",
-  "io.circe" %% "circe-parser"  % "0.14.6"
+  "io.circe" %% "circe-parser"  % "0.14.6",
+  "com.typesafe" % "config" % "1.4.3",
 )
 
 lazy val cli = (project in file("cli"))
