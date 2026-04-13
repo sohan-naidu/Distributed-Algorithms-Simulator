@@ -16,7 +16,6 @@ lazy val commonDependencies = Seq(
 lazy val cli = (project in file("cli"))
   .dependsOn(core, enricher)
   .settings(
-    name := "simulator",
     libraryDependencies ++= commonDependencies ++ Seq("com.monovore" %% "decline" % "2.4.1")
   )
 
@@ -31,12 +30,25 @@ lazy val enricher = (project in file("core/enricher"))
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
   )
 
+lazy val base = (project in file("core/translator/base"))
+  .settings(
+    scalaVersion := "3.3.4",
+    libraryDependencies := Seq.empty
+  )
+
 lazy val translator = (project in file("core/translator"))
-  .dependsOn(core)
+  .dependsOn(core, enricher, base)
   .settings(
     libraryDependencies ++= commonDependencies ++ Seq(
       "com.typesafe.akka" %% "akka-actor-typed" % "2.10.7",
       "com.typesafe.akka" %% "akka-stream"      % "2.10.7"
+    ),
+    excludeDependencies ++= Seq(
+      ExclusionRule("com.typesafe.akka", "akka-actor-typed_2.13"),
+      ExclusionRule("com.typesafe.akka", "akka-actor_2.13"),
+      ExclusionRule("com.typesafe.akka", "akka-stream_2.13"),
+      ExclusionRule("com.typesafe.akka", "akka-protobuf-v3_2.13"),
+      ExclusionRule("com.typesafe.akka", "akka-slf4j_2.13")
     )
   )
 
