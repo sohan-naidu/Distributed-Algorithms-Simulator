@@ -4,9 +4,11 @@ import io.circe.generic.semiauto.deriveEncoder
 import io.circe.{Decoder, Encoder, HCursor}
 import core.Message
 
-case class EnrichedNode (
+final case class EnrichedNode (
   id: Int,
-  pdf: Map[Message, Double]
+  pdf: Map[Message, Double],
+  tickIntervalMs: Option[Int] = None,
+  isInput: Boolean = false
 )
 
 object EnrichedNode {

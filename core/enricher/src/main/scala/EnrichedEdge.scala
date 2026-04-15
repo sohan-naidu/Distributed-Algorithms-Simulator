@@ -4,7 +4,7 @@ import core.Message
 import io.circe.generic.semiauto.deriveEncoder
 import io.circe.{Decoder, Encoder, HCursor}
 
-case class EnrichedEdge (
+final case class EnrichedEdge (
   fromId: Int,
   toId: Int,
   allowedMessages: Set[Message]

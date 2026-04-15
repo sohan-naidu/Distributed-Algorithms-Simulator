@@ -12,6 +12,8 @@ lazy val commonDependencies = Seq(
   "io.circe" %% "circe-generic" % "0.14.6",
   "io.circe" %% "circe-parser"  % "0.14.6",
   "com.typesafe" % "config" % "1.4.3",
+  "com.github.pureconfig" %% "pureconfig-core" % "0.17.10",
+  "com.github.pureconfig" %% "pureconfig-generic-scala3" % "0.17.10"
 )
 
 lazy val cli = (project in file("cli"))

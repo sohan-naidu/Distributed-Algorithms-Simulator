@@ -3,6 +3,7 @@ package core
 object Constants {
   val SIMULATOR: String = "simulator"
   val GENERATOR: String = "generator"
+  val ENRICHER: String = "enricher"
   
   val JAR_PATH = "jarPath"
   val MIN_MEMORY = "minimumMemory"

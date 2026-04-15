@@ -1,6 +1,6 @@
 package enricher
 
-case class EnrichedGraph (
+final case class EnrichedGraph (
   nodes: List[EnrichedNode],
   edges: List[EnrichedEdge]
 )

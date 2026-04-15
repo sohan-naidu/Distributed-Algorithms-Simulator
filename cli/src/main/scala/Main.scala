@@ -7,12 +7,12 @@ import com.typesafe.scalalogging.LazyLogging
 import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters.*
 import enricher.Enricher
-import core.ConfigReader
+import core.ConfigLoader
 
 sealed trait Command
 object Command {
   final case class Generate(configPath: Option[String], clearFlag: Boolean) extends Command
-  final case class Enrich(inputPath:String, outputPath: String, clearFlag: Boolean) extends Command
+  final case class Enrich(configPath: Option[String], clearFlag: Boolean) extends Command
 }
 
 object Main extends CommandApp(
@@ -34,17 +34,11 @@ object CommandLineInterface extends LazyLogging {
       help = "Path to generator config"
     ).orNone
 
-  private val enricherInputPath: Opts[String] =
+  private val enricherConfig: Opts[Option[String]] =
     Opts.option[String](
-      "input",
-      help = "Input path for the enricher"
-    ).withDefault("output/generated/generated.ngs")
-
-  private val enricherOutputPath: Opts[String] =
-    Opts.option[String](
-      "output",
-      help = "Output path for the enricher"
-    ).withDefault("output/enriched/enriched.sim")
+      "config",
+      help = "Path to enricher config"
+    ).orNone
 
   private val generate: Opts[Command] =
     Opts.subcommand("generate", "Generate a graph using NetGameSim") {
@@ -55,7 +49,7 @@ object CommandLineInterface extends LazyLogging {
   private val enrich: Opts[Command] =
     Opts.subcommand("enrich", "Enrich the graph by adding edge labels and a probability distribution" +
       "function for each node") {
-      (enricherInputPath, enricherOutputPath, clearFlag).mapN(Command.Enrich.apply)
+      (enricherConfig, clearFlag).mapN(Command.Enrich.apply)
     }
 
   private val command: Opts[Command] =
@@ -63,7 +57,11 @@ object CommandLineInterface extends LazyLogging {
 
   def run: Opts[Unit] = command.map {
     case Command.Generate(configPath, clearFlag) =>
-      val genConfig = ConfigReader.getGeneratorConfig(configPath)
+      if (clearFlag) {
+        clear()
+      }
+
+      val genConfig = ConfigLoader.getGeneratorConfig(configPath)
       logger.info(s"Generating a graph...")
       val exitCode =
         Process(
@@ -82,11 +80,13 @@ object CommandLineInterface extends LazyLogging {
         logger.error(s"Generator failed with exit code $exitCode")
       }
 
-    case Command.Enrich(inputPath, outputPath, clearFlag) =>
+    case Command.Enrich(configPath, clearFlag) =>
+      val enricherConfig = ConfigLoader.getEnricherConfig(configPath)
       if (clearFlag) {
         clear()
       }
-      Enricher.run(inputPath, outputPath)
+      Enricher.run(enricherConfig.genOutputFilePath, enricherConfig.nodes, enricherConfig.edges,
+        enricherConfig.enrichedOutputFilePath)
   }
 
   private def clear(): Unit = {
