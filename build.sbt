@@ -17,7 +17,7 @@ lazy val commonDependencies = Seq(
 )
 
 lazy val cli = (project in file("cli"))
-  .dependsOn(core, enricher)
+  .dependsOn(core, enricher, translator)
   .settings(
     libraryDependencies ++= commonDependencies ++ Seq("com.monovore" %% "decline" % "2.4.1")
   )
@@ -34,10 +34,6 @@ lazy val enricher = (project in file("core/enricher"))
   )
 
 lazy val base = (project in file("core/translator/base"))
-  .settings(
-    scalaVersion := "3.3.4",
-    libraryDependencies := Seq.empty
-  )
 
 lazy val translator = (project in file("core/translator"))
   .dependsOn(core, enricher, base)
@@ -46,17 +42,10 @@ lazy val translator = (project in file("core/translator"))
       "com.typesafe.akka" %% "akka-actor-typed" % "2.10.7",
       "com.typesafe.akka" %% "akka-stream"      % "2.10.7"
     ),
-    excludeDependencies ++= Seq(
-      ExclusionRule("com.typesafe.akka", "akka-actor-typed_2.13"),
-      ExclusionRule("com.typesafe.akka", "akka-actor_2.13"),
-      ExclusionRule("com.typesafe.akka", "akka-stream_2.13"),
-      ExclusionRule("com.typesafe.akka", "akka-protobuf-v3_2.13"),
-      ExclusionRule("com.typesafe.akka", "akka-slf4j_2.13")
-    )
   )
 
 lazy val root = (project in file("."))
-  .aggregate(cli, core, enricher, translator)
+  .aggregate(cli, core, enricher, base, translator)
   .settings(
     Compile / mainClass := (cli / Compile / mainClass).value
   )

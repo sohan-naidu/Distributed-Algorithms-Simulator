@@ -60,5 +60,11 @@ object ConfigLoader extends LazyLogging {
     validateEnricherConfig(config)
     config
   }
+  
+  def getTranslatorConfig(configPath: Option[String]): TranslatorConfig = {
+    given ConfigReader[TranslatorConfig] = ConfigReader.derived
 
+    val config = ConfigSource.fromConfig(load(configPath)).at(key(SIMULATOR, TRANSLATOR)).loadOrThrow[TranslatorConfig]
+    config
+  }
 }

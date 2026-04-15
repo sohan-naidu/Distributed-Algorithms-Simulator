@@ -8,11 +8,13 @@ import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters.*
 import enricher.Enricher
 import core.ConfigLoader
+import translator.Translator
 
 sealed trait Command
 object Command {
   final case class Generate(configPath: Option[String], clearFlag: Boolean) extends Command
   final case class Enrich(configPath: Option[String], clearFlag: Boolean) extends Command
+  final case class Simulate(algorithm: String) extends Command
 }
 
 object Main extends CommandApp(
@@ -40,6 +42,12 @@ object CommandLineInterface extends LazyLogging {
       help = "Path to enricher config"
     ).orNone
 
+  private val algorithm: Opts[String] =
+    Opts.option[String](
+      "algorithm",
+      help = "Algorithm to simulate"
+    )
+
   private val generate: Opts[Command] =
     Opts.subcommand("generate", "Generate a graph using NetGameSim") {
       (generatorConfig, clearFlag)
@@ -52,8 +60,13 @@ object CommandLineInterface extends LazyLogging {
       (enricherConfig, clearFlag).mapN(Command.Enrich.apply)
     }
 
+  private val simulate: Opts[Command] =
+    Opts.subcommand("simulate", "Simulate an algorithm") {
+      (algorithm).map(Command.Simulate.apply)
+    }
+
   private val command: Opts[Command] =
-    generate.orElse(enrich)
+    generate.orElse(enrich).orElse(simulate)
 
   def run: Opts[Unit] = command.map {
     case Command.Generate(configPath, clearFlag) =>
@@ -87,6 +100,10 @@ object CommandLineInterface extends LazyLogging {
       }
       Enricher.run(enricherConfig.genOutputFilePath, enricherConfig.nodes, enricherConfig.edges,
         enricherConfig.enrichedOutputFilePath)
+
+    case Command.Simulate(algorithm) =>
+      val translatorConfig = ConfigLoader.getTranslatorConfig(None)
+      Translator.run(translatorConfig.enrichedOutputFilePath, algorithm)
   }
 
   private def clear(): Unit = {

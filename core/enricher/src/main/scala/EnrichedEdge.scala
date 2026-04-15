@@ -1,7 +1,7 @@
 package enricher
 
 import core.Message
-import io.circe.generic.semiauto.deriveEncoder
+import io.circe.generic.semiauto.{deriveEncoder, deriveDecoder}
 import io.circe.{Decoder, Encoder, HCursor}
 
 final case class EnrichedEdge (
@@ -11,10 +11,6 @@ final case class EnrichedEdge (
 )
 
 object EnrichedEdge {
-  given Decoder[EnrichedEdge] = (c: HCursor) =>
-    for
-      fromId <- c.downField("fromNode").downField("id").as[Int]
-      toId <- c.downField("toNode").downField("id").as[Int]
-    yield EnrichedEdge(fromId, toId, Set.empty[core.Message])
+  given Decoder[EnrichedEdge] = deriveDecoder
   given Encoder[EnrichedEdge] = deriveEncoder
 }
