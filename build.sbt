@@ -17,9 +17,21 @@ lazy val commonDependencies = Seq(
 )
 
 lazy val cli = (project in file("cli"))
+  .enablePlugins(Cinnamon)
   .dependsOn(core, enricher, translator)
   .settings(
-    libraryDependencies ++= commonDependencies ++ Seq("com.monovore" %% "decline" % "2.4.1")
+    run / fork := true,
+    run / baseDirectory := (ThisBuild / baseDirectory).value,
+    run / javaOptions += s"-Duser.dir=${(ThisBuild / baseDirectory).value}",
+    run / cinnamon := true,
+    test / cinnamon := true,
+    cinnamonLogLevel := "INFO",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      "com.monovore" %% "decline" % "2.4.1",
+      Cinnamon.library.cinnamonAkka,
+      Cinnamon.library.cinnamonAkkaTyped,
+      Cinnamon.library.cinnamonCHMetrics
+    )
   )
 
 lazy val core = (project in file("core/"))
@@ -33,10 +45,13 @@ lazy val enricher = (project in file("core/enricher"))
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
   )
 
-lazy val base = (project in file("core/translator/base"))
+lazy val framework = (project in file("core/framework"))
+
+lazy val algorithms = (project in file("core/algorithms"))
+  .dependsOn(enricher, framework)
 
 lazy val translator = (project in file("core/translator"))
-  .dependsOn(core, enricher, base)
+  .dependsOn(core, enricher, framework, algorithms)
   .settings(
     libraryDependencies ++= commonDependencies ++ Seq(
       "com.typesafe.akka" %% "akka-actor-typed" % "2.10.7",
@@ -45,9 +60,7 @@ lazy val translator = (project in file("core/translator"))
   )
 
 lazy val root = (project in file("."))
-  .aggregate(cli, core, enricher, base, translator)
+  .aggregate(cli, core, enricher, translator, algorithms)
   .settings(
     Compile / mainClass := (cli / Compile / mainClass).value
   )
-
-
