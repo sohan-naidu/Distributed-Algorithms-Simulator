@@ -41,7 +41,9 @@ lazy val core = (project in file("core/"))
 lazy val enricher = (project in file("core/enricher"))
   .dependsOn(core)
   .settings(
-    libraryDependencies ++= commonDependencies,
+    libraryDependencies ++= commonDependencies ++ Seq(
+      "guru.nidi" % "graphviz-java" % "0.18.1"
+    ),
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
   )
 
