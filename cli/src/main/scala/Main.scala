@@ -118,6 +118,7 @@ object CommandLineInterface extends LazyLogging {
       enricherConfig.genOutputFilePath,
       enricherConfig.nodes,
       enricherConfig.edges,
+      enricherConfig.ring,
       enricherConfig.enrichedOutputFilePath
     )
   }

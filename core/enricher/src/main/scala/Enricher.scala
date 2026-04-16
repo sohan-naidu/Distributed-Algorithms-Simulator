@@ -5,7 +5,7 @@ import core.{EdgeOverride, EdgesConfig, Message, NodeOverride, NodesConfig}
 
 object Enricher extends LazyLogging {
   def run(inputPath: String, nodesConfig: NodesConfig,
-          edgesConfig: EdgesConfig, outputPath: String): Unit = {
+          edgesConfig: EdgesConfig, ring: Boolean, outputPath: String): Unit = {
     val graph = GraphIO.load(inputPath)
     val rawGraph = graph match
       case Right(LoadedGraph.Raw(raw)) =>
@@ -15,7 +15,7 @@ object Enricher extends LazyLogging {
       case Left(err) =>
         throw new RuntimeException(err)
 
-    val enriched = enrich(rawGraph, nodesConfig, edgesConfig)
+    val enriched = enrich(rawGraph, nodesConfig, edgesConfig, ring)
     GraphIO.write(outputPath, enriched)
   }
 
@@ -37,11 +37,12 @@ object Enricher extends LazyLogging {
     }
   }
 
-  private def enrich(graph: RawGraph, nodesConfig: NodesConfig, edgesConfig: EdgesConfig): EnrichedGraph = {
-    validateNodesConfigOverrides(graph.nodes, nodesConfig.overrides)
-    validateEdgesConfigOverrides(graph.edges, edgesConfig.overrides)
-    val enrichedNodes = applyNodeConfigs(graph.nodes, nodesConfig)
-    val enrichedEdges = applyEdgeConfigs(graph.edges, edgesConfig)
+  private def enrich(graph: RawGraph, nodesConfig: NodesConfig, edgesConfig: EdgesConfig, ring: Boolean): EnrichedGraph = {
+    val updatedGraph = if (ring) graph.copy(edges = constructRing(graph.edges)) else graph
+    validateNodesConfigOverrides(updatedGraph.nodes, nodesConfig.overrides)
+    validateEdgesConfigOverrides(updatedGraph.edges, edgesConfig.overrides)
+    val enrichedNodes = applyNodeConfigs(updatedGraph.nodes, nodesConfig)
+    val enrichedEdges = applyEdgeConfigs(updatedGraph.edges, edgesConfig)
     logger.info("Successfully enriched the graph")
     EnrichedGraph(enrichedNodes, enrichedEdges)
   }
@@ -68,4 +69,26 @@ object Enricher extends LazyLogging {
           EnrichedEdge(fromId = edge.fromNode, toId = edge.toNode,
             allowedMessages = o.allow)
     }
+
+  private def constructRing(edges: List[RawEdge]): List[RawEdge] =
+    val degreeCount: Map[Int, Int] =
+      edges
+        .flatMap(e => List(e.fromNode, e.toNode))
+        .groupBy(identity)
+        .view
+        .mapValues(_.size)
+        .toMap
+
+    val endpoints: List[Int] =
+      degreeCount.collect {
+        case (node, count) if count == 1 => node
+      }.toList
+
+    // Expect exactly two loose ends
+    require(
+      endpoints.size == 2,
+      s"Cannot convert graph to a ring. Expected exactly 2 endpoints, found ${endpoints.size}"
+    )
+    logger.info("Successfully constructed a ring")
+    edges :+ RawEdge(fromNode = endpoints.head, toNode = endpoints(1))
 }
