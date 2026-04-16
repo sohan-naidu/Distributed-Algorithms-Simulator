@@ -39,10 +39,11 @@ object Enricher extends LazyLogging {
 
   private def enrich(graph: RawGraph, nodesConfig: NodesConfig, edgesConfig: EdgesConfig, ring: Boolean): EnrichedGraph = {
     val updatedGraph = if (ring) graph.copy(edges = constructRing(graph.edges)) else graph
-    validateNodesConfigOverrides(updatedGraph.nodes, nodesConfig.overrides)
-    validateEdgesConfigOverrides(updatedGraph.edges, edgesConfig.overrides)
-    val enrichedNodes = applyNodeConfigs(updatedGraph.nodes, nodesConfig)
-    val enrichedEdges = applyEdgeConfigs(updatedGraph.edges, edgesConfig)
+    val bidirectionalGraph = updatedGraph.copy(edges = makeBidirectional(updatedGraph.edges))
+    validateNodesConfigOverrides(bidirectionalGraph.nodes, nodesConfig.overrides)
+    validateEdgesConfigOverrides(bidirectionalGraph.edges, edgesConfig.overrides)
+    val enrichedNodes = applyNodeConfigs(bidirectionalGraph.nodes, nodesConfig)
+    val enrichedEdges = applyEdgeConfigs(bidirectionalGraph.edges, edgesConfig)
     logger.info("Successfully enriched the graph")
     EnrichedGraph(enrichedNodes, enrichedEdges)
   }
@@ -91,4 +92,10 @@ object Enricher extends LazyLogging {
     )
     logger.info("Successfully constructed a ring")
     edges :+ RawEdge(fromNode = endpoints.head, toNode = endpoints(1))
+
+  private def makeBidirectional(edges: List[RawEdge]): List[RawEdge] = {
+    edges.flatMap { e =>
+      List(e, e.copy(fromNode = e.toNode, toNode = e.fromNode))
+    }.distinct
+  }
 }
