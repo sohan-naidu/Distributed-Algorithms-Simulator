@@ -1,10 +1,9 @@
 import com.monovore.decline.*
-
-import scala.sys.process.*
 import cats.syntax.all.*
 import com.typesafe.scalalogging.LazyLogging
+import scala.sys.process.*
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Paths}
 import scala.jdk.CollectionConverters.*
 import enricher.Enricher
 import core.ConfigLoader
@@ -15,6 +14,8 @@ object Command {
   final case class Generate(configPath: Option[String], clearFlag: Boolean) extends Command
   final case class Enrich(configPath: Option[String], clearFlag: Boolean) extends Command
   final case class Simulate(algorithm: String) extends Command
+  final case class Pipeline(generatorConfigPath: Option[String], enricherConfigPath: Option[String],
+                             algorithm: String, clearFlag: Boolean) extends Command
 }
 
 object Main extends CommandApp(
@@ -25,33 +26,26 @@ object Main extends CommandApp(
 
 object CommandLineInterface extends LazyLogging {
   private val clearFlag: Opts[Boolean] =
-    Opts.flag(
-      "clear",
-      help = "Clear the output directory"
-    ).orFalse
+    Opts.flag("clear", help = "Clear the output directory").orFalse
 
   private val generatorConfig: Opts[Option[String]] =
-    Opts.option[String](
-      "config",
-      help = "Path to generator config"
-    ).orNone
+    Opts.option[String]("config", help = "Path to generator config").orNone
 
   private val enricherConfig: Opts[Option[String]] =
-    Opts.option[String](
-      "config",
-      help = "Path to enricher config"
-    ).orNone
+    Opts.option[String]("config", help = "Path to enricher config").orNone
 
   private val algorithm: Opts[String] =
-    Opts.option[String](
-      "algorithm",
-      help = "Algorithm to simulate"
-    )
+    Opts.option[String]("algorithm", help = "Algorithm to simulate")
+
+  private val pipelineGeneratorConfig: Opts[Option[String]] =
+    Opts.option[String]("generator-config", help = "Path to generator config").orNone
+
+  private val pipelineEnricherConfig: Opts[Option[String]] =
+    Opts.option[String]("enricher-config", help = "Path to enricher config").orNone
 
   private val generate: Opts[Command] =
     Opts.subcommand("generate", "Generate a graph using NetGameSim") {
-      (generatorConfig, clearFlag)
-        .mapN(Command.Generate.apply)
+      (generatorConfig, clearFlag).mapN(Command.Generate.apply)
     }
 
   private val enrich: Opts[Command] =
@@ -62,48 +56,75 @@ object CommandLineInterface extends LazyLogging {
 
   private val simulate: Opts[Command] =
     Opts.subcommand("simulate", "Simulate an algorithm") {
-      (algorithm).map(Command.Simulate.apply)
+      algorithm.map(Command.Simulate.apply)
+    }
+
+  private val pipeline: Opts[Command] =
+    Opts.subcommand("pipeline", "Run generate, enrich, and simulate in sequence") {
+      (pipelineGeneratorConfig, pipelineEnricherConfig, algorithm, clearFlag)
+        .mapN(Command.Pipeline.apply)
     }
 
   private val command: Opts[Command] =
-    generate.orElse(enrich).orElse(simulate)
+    generate.orElse(enrich).orElse(simulate).orElse(pipeline)
 
-  def run: Opts[Unit] = command.map {
-    case Command.Generate(configPath, clearFlag) =>
-      if (clearFlag) {
-        clear()
-      }
+  def run: Opts[Unit] =
+    command.map {
+      case Command.Generate(configPath, clearFlag) =>
+        runGenerate(configPath, clearFlag)
 
-      val genConfig = ConfigLoader.getGeneratorConfig(configPath)
-      logger.info(s"Generating a graph...")
-      val exitCode =
-        Process(
-          Seq(
-            "java",
-            s"-Xms${genConfig.minMemory}G",
-            s"-Xmx${genConfig.maxMemory}G",
-            s"-Dconfig.file=${genConfig.NGSConfigPath}",
-            "-jar",
-            s"${genConfig.jarPath}",
-            s"${genConfig.outputFileName}"
-          )
-        ).!
+      case Command.Enrich(configPath, clearFlag) =>
+        runEnrich(configPath, clearFlag)
 
-      if (exitCode != 0) {
-        logger.error(s"Generator failed with exit code $exitCode")
-      }
+      case Command.Simulate(algorithm) =>
+        runSimulate(algorithm)
 
-    case Command.Enrich(configPath, clearFlag) =>
-      val enricherConfig = ConfigLoader.getEnricherConfig(configPath)
-      if (clearFlag) {
-        clear()
-      }
-      Enricher.run(enricherConfig.genOutputFilePath, enricherConfig.nodes, enricherConfig.edges,
-        enricherConfig.enrichedOutputFilePath)
+      case Command.Pipeline(generatorConfigPath, enricherConfigPath, algorithm, clearFlag) =>
+        if (clearFlag) clear()
+        runGenerate(generatorConfigPath, clearFlag = false)
+        runEnrich(enricherConfigPath, clearFlag = false)
+        runSimulate(algorithm)
+    }
 
-    case Command.Simulate(algorithm) =>
-      val translatorConfig = ConfigLoader.getTranslatorConfig(None)
-      Translator.run(translatorConfig.enrichedOutputFilePath, algorithm)
+  private def runGenerate(configPath: Option[String], clearFlag: Boolean): Unit = {
+    if (clearFlag) clear()
+
+    val genConfig = ConfigLoader.getGeneratorConfig(configPath)
+    logger.info("Generating a graph...")
+
+    val exitCode =
+      Process(
+        Seq(
+          "java",
+          s"-Xms${genConfig.minMemory}G",
+          s"-Xmx${genConfig.maxMemory}G",
+          s"-Dconfig.file=${genConfig.NGSConfigPath}",
+          "-jar",
+          s"${genConfig.jarPath}",
+          s"${genConfig.outputFileName}"
+        )
+      ).!
+
+    if (exitCode != 0) {
+      logger.error(s"Generator failed with exit code $exitCode")
+    }
+  }
+
+  private def runEnrich(configPath: Option[String], clearFlag: Boolean): Unit = {
+    if (clearFlag) clear()
+
+    val enricherConfig = ConfigLoader.getEnricherConfig(configPath)
+    Enricher.run(
+      enricherConfig.genOutputFilePath,
+      enricherConfig.nodes,
+      enricherConfig.edges,
+      enricherConfig.enrichedOutputFilePath
+    )
+  }
+
+  private def runSimulate(algorithm: String): Unit = {
+    val translatorConfig = ConfigLoader.getTranslatorConfig(None)
+    Translator.run(translatorConfig.enrichedOutputFilePath, algorithm)
   }
 
   private def clear(): Unit = {
