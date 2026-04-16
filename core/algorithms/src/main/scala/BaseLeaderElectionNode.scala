@@ -8,10 +8,13 @@ import enricher.EnrichedNode
 
 import scala.concurrent.duration.DurationInt
 
-abstract class BaseLeaderElectionNode(node: EnrichedNode) extends BaseDistributedNode(node.id.toString) {
+abstract class BaseLeaderElectionNode(node: EnrichedNode, edges: Map[Int, Set[Message]])
+  extends BaseDistributedNode(node.id.toString) {
+
   private val pdf: Map[Message, Double] = node.pdf
   private val tickIntervalMs: Option[Int] = node.tickIntervalMs
-  val isInput: Boolean = node.isInput
+  private val isInput: Boolean = node.isInput
+  private val edgeConstrains: Map[Int, Set[Message]] = edges
 
   private def onStart(ctx: ActorContext[DistributedMessage],
                       timers: TimerScheduler[DistributedMessage]): Behavior[DistributedMessage] = {
@@ -51,17 +54,31 @@ abstract class BaseLeaderElectionNode(node: EnrichedNode) extends BaseDistribute
   
   private def onTick(ctx: ActorContext[DistributedMessage]): Behavior[DistributedMessage] = {
     maybeGenerateMessage() match {
-      case Some(payload) if getPeers.nonEmpty =>
+      case Some(message) if getPeers.nonEmpty =>
         val peer = getRandomNeighbor
-        ctx.log.info(s"$nodeId sampled $payload")
-        peer ! NetworkMessage(nodeId, peer.path.name, getPayload(payload))
+        ctx.log.info(s"$nodeId sampled $message")
+        sendIfAllowed(ctx, peer, message)
 
       case _ =>
         ()
     }
     Behaviors.same
   }
-  
+
+  private def sendIfAllowed(ctx: ActorContext[DistributedMessage], toPeer: ActorRef[DistributedMessage],
+                     message: Message): Unit = {
+    val to = toPeer.path.name.toInt
+    edgeConstrains.get(to) match {
+      case None =>
+        ctx.log.warn(s"Dropping $message from $nodeId to $to: no edge exists")
+      case Some(allowed) if !allowed.contains(message) =>
+        ctx.log.warn(s"Dropping $message from $nodeId to $to: edge constraint does not allow it")
+      case Some(_) =>
+        toPeer ! NetworkMessage(nodeId, toPeer.path.name, getPayload(message))
+    }
+  }
+
+
   override def behavior(): Behavior[DistributedMessage] = {
     Behaviors.withTimers{timers =>
       Behaviors.setup{ ctx =>

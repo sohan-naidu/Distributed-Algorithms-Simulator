@@ -6,6 +6,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.uic.cs553.distributed.framework.{CommonMessages, DistributedMessage}
 import enricher.{EnrichedEdge, EnrichedGraph, GraphIO, LoadedGraph}
 import algorithms.HirschbergSinclairNode
+import core.Message
 
 enum Algorithm:
   case HirschbergSinclair, TreeElection
@@ -35,9 +36,18 @@ object Translator extends LazyLogging:
   private def translate(graph: EnrichedGraph, algorithm: Algorithm
                        ): (ActorSystem[Nothing], Map[Int, ActorRef[DistributedMessage]]) =
     val system = ActorSystem(Behaviors.empty, "distributed-algorithms-simulator")
+
+    val edgesMap: Map[Int, Map[Int, Set[Message]]] =
+      graph.edges
+        .groupBy(_.fromId)
+        .view
+        .mapValues { edges =>
+          edges.groupMapReduce(_.toId)(_.allowedMessages)(_ union _)
+        }
+        .toMap
     val actors = graph.nodes.map { node =>
       val behavior = algorithm match
-        case Algorithm.HirschbergSinclair => HirschbergSinclairNode(node)
+        case Algorithm.HirschbergSinclair => HirschbergSinclairNode(node, edgesMap.getOrElse(node.id, Map.empty))
 //        case Algorithm.TreeElection       => TreeElectionNode(node)
       node.id -> system.systemActorOf(behavior, s"${node.id}")
     }.toMap
