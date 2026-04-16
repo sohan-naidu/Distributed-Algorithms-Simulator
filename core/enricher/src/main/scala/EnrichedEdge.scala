@@ -11,6 +11,11 @@ final case class EnrichedEdge (
 )
 
 object EnrichedEdge {
-  given Decoder[EnrichedEdge] = deriveDecoder
-  given Encoder[EnrichedEdge] = deriveEncoder
+  given Decoder[EnrichedEdge] = Decoder.instance { c =>
+    for
+      fromId <- c.get[Int]("fromId")
+      toId <- c.get[Int]("toId")
+      allowedMessages <- c.get[Set[Message]]("allowedMessages")
+    yield EnrichedEdge(fromId, toId, allowedMessages)
+  }
 }

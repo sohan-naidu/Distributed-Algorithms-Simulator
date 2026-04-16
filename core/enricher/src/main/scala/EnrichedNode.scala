@@ -12,6 +12,12 @@ final case class EnrichedNode (
 )
 
 object EnrichedNode {
-  given Decoder[EnrichedNode] = deriveDecoder
-  given Encoder[EnrichedNode] = deriveEncoder
+  given Decoder[EnrichedNode] = Decoder.instance { c =>
+    for
+      id <- c.get[Int]("id")
+      pdf <- c.get[Map[Message, Double]]("pdf")
+      tickIntervalMs <- c.get[Option[Int]]("tickIntervalMs")
+      isInput <- c.get[Boolean]("isInput")
+    yield EnrichedNode(id, pdf, tickIntervalMs, isInput)
+  }
 }

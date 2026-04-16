@@ -4,36 +4,33 @@ import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.actor.typed.scaladsl.Behaviors
 import com.typesafe.scalalogging.LazyLogging
 import com.uic.cs553.distributed.framework.{CommonMessages, DistributedMessage}
-import enricher.{EnrichedEdge, EnrichedGraph, GraphIO}
-import translator.HirschbergSinclairNode
+import enricher.{EnrichedEdge, EnrichedGraph, GraphIO, LoadedGraph}
+import algorithms.HirschbergSinclairNode
 
 enum Algorithm:
   case HirschbergSinclair, TreeElection
 
 object Translator extends LazyLogging:
 
-  def run(inputPath: String, algorithm: String): Unit =
-    GraphIO.load(inputPath) match
-      case Some(graph) =>
-        logger.info("Graph loaded")
-
-        val algo = Algorithm.valueOf(algorithm)
-        logger.info(s"Parsed algorithm: $algo")
-
-        val (system, actors) = translate(graph, algo)
-        logger.info("Translate done")
-
-        initializeNeighbors(actors, graph.edges)
-        logger.info("Neighbors initialized")
-
-        startActors(actors)
-        logger.info("Actors started")
-
-        Thread.sleep(30_000)
-        system.terminate()
-
-      case None =>
-        logger.error(s"Failed to load graph from $inputPath")
+  def run(inputPath: String, algorithm: String): Unit = {
+    val graph = GraphIO.load(inputPath)
+    val enrichedGraph = graph match
+      case Right(LoadedGraph.Enriched(enriched)) =>
+        enriched
+      case Right(LoadedGraph.Raw(_)) =>
+        throw new RuntimeException("Expected raw graph but file is already enriched")
+      case Left(err) =>
+        throw new RuntimeException(err)
+    val algo = Algorithm.valueOf(algorithm)
+    val (system, actors) = translate(enrichedGraph, algo)
+    logger.info("Translated graph to Akka system")
+    initializeNeighbors(actors, enrichedGraph.edges)
+    logger.info("Neighbors initialized")
+    startActors(actors)
+    logger.info("Actors started")
+    Thread.sleep(30_000)
+    system.terminate()
+  }
 
   private def translate(graph: EnrichedGraph, algorithm: Algorithm
                        ): (ActorSystem[Nothing], Map[Int, ActorRef[DistributedMessage]]) =
