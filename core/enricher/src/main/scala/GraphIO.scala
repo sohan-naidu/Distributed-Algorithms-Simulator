@@ -95,6 +95,7 @@ object GraphIO extends LazyLogging{
 
     val g =
       graph("enriched")
+        .directed()
         .`with`(nodesMap.values.toSeq: _*)
         .linkAttr()
         .`with`("class", "link-class")
