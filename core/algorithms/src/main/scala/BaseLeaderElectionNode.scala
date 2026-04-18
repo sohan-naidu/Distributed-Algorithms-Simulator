@@ -5,8 +5,8 @@ import akka.actor.typed.{ActorRef, Behavior}
 import com.uic.cs553.distributed.framework.{BaseDistributedNode, CommonMessages, DistributedMessage, NetworkMessage}
 import core.Message
 import enricher.EnrichedNode
-
 import scala.concurrent.duration.DurationInt
+import MessageConverter.{toNodeMessage, toCoreMessage}
 
 abstract class BaseLeaderElectionNode(node: EnrichedNode, edges: Map[Int, Set[Message]])
   extends BaseDistributedNode(node.id.toString) {
@@ -18,9 +18,11 @@ abstract class BaseLeaderElectionNode(node: EnrichedNode, edges: Map[Int, Set[Me
 
   private def onStart(ctx: ActorContext[DistributedMessage],
                       timers: TimerScheduler[DistributedMessage]): Behavior[DistributedMessage] = {
-    tickIntervalMs.filter(_ > 0).foreach {ms =>
+    tickIntervalMs.filter(_ > 0).foreach { ms =>
       timers.startTimerWithFixedDelay(TICK, TICK, ms.millis)
       ctx.log.info(s"$nodeId has a timer $tickIntervalMs")
+      if nodeId == "3" then
+        ctx.log.info(s"${node.pdf}")
     }
     Behaviors.same
   }
@@ -44,82 +46,81 @@ abstract class BaseLeaderElectionNode(node: EnrichedNode, edges: Map[Int, Set[Me
       }.orElse(pdf.keys.lastOption)
     }
   }
-
-  private def getPayload(message: Message): NodeMessage =
-    message match
-      case Message.Ping => PING
-      case Message.Pong => PONG
-      case Message.Work => WORK
-      case Message.Ack => ACK
   
   private def onTick(ctx: ActorContext[DistributedMessage]): Behavior[DistributedMessage] = {
     maybeGenerateMessage() match {
       case Some(message) if getPeers.nonEmpty =>
         val peer = getRandomNeighbor
         ctx.log.info(s"$nodeId sampled $message")
-        sendIfAllowed(ctx, peer, message)
-
+        sendIfAllowed(ctx, peer, toNodeMessage(message))
       case _ =>
         ()
     }
     Behaviors.same
   }
 
-  private def sendIfAllowed(ctx: ActorContext[DistributedMessage], toPeer: ActorRef[DistributedMessage],
-                     message: Message): Unit = {
+  protected def sendIfAllowed(ctx: ActorContext[DistributedMessage], toPeer: ActorRef[DistributedMessage],
+                            message: NodeMessage
+                             ): Unit = {
     val to = toPeer.path.name.toInt
     edgeConstrains.get(to) match {
       case None =>
         ctx.log.warn(s"Dropping $message from $nodeId to $to: no edge exists")
-      case Some(allowed) if !allowed.contains(message) =>
+      case Some(allowed) if !allowed.contains(toCoreMessage(message)) =>
         ctx.log.warn(s"Dropping $message from $nodeId to $to: edge constraint does not allow it")
       case Some(_) =>
-        toPeer ! NetworkMessage(nodeId, toPeer.path.name, getPayload(message))
+        toPeer ! NetworkMessage(nodeId, toPeer.path.name, message)
     }
   }
 
+  protected def handleBackgroundChatter(ctx: ActorContext[DistributedMessage],
+                                        timers: TimerScheduler[DistributedMessage], message: DistributedMessage
+                                       ): Option[Behavior[DistributedMessage]] = {
+    message match {
+      case CommonMessages.Initialize(peerRefs) =>
+        Some(super.onInitialize(ctx, peerRefs))
 
-  override def behavior(): Behavior[DistributedMessage] = {
-    Behaviors.withTimers{timers =>
-      Behaviors.setup{ ctx =>
-        Behaviors.receiveMessage {
-          case CommonMessages.Initialize(peerRefs) =>
-            super.onInitialize(ctx, peerRefs)
+      case CommonMessages.Stop() =>
+        ctx.log.info(s"Node $nodeId stopping")
+        Some(Behaviors.stopped)
 
-          case CommonMessages.Stop() =>
-            ctx.log.info(s"Node $nodeId stopping")
-            Behaviors.stopped
+      case CommonMessages.Start() =>
+        Some(onStart(ctx, timers))
 
-          case CommonMessages.Start() =>
-            onStart(ctx, timers)
+      case TICK =>
+        Some(onTick(ctx))
 
-          case TICK =>
-            onTick(ctx)
+      case NetworkMessage(from, to, payload) =>
+        payload match {
+          case PING =>
+            ctx.log.info(s"$nodeId - Ping received")
+            getPeers.find(_.path.name == s"$from")
+              .foreach(_ ! NetworkMessage(nodeId, from, PONG))
+            Some(Behaviors.same)
 
-          case NetworkMessage(from, to, payload) =>
-            payload match {
-              case PING =>
-                ctx.log.info(s"$nodeId - Ping received")
-                getPeers.find(_.path.name == s"$from")
-                  .foreach(_ ! NetworkMessage(nodeId, from, PONG))
-                Behaviors.same
+          case PONG =>
+            ctx.log.info(s"$nodeId - Pong received")
+            Some(Behaviors.same)
 
-              case PONG =>
-                ctx.log.info(s"$nodeId - Pong received")
-                Behaviors.same
+          case WORK =>
+            ctx.log.info(s"$nodeId - Enqueuing work")
+            getPeers.find(_.path.name == s"$from")
+              .foreach(_ ! NetworkMessage(nodeId, from, ACK))
+            Some(Behaviors.same)
 
-              case WORK =>
-                ctx.log.info(s"$nodeId - Enqueuing work")
-                getPeers.find(_.path.name == s"$from")
-                  .foreach(_ ! NetworkMessage(nodeId, from, ACK))
-                Behaviors.same
+          case ACK =>
+            ctx.log.info(s"$nodeId - Ack received")
+            Some(Behaviors.same)
 
-              case ACK =>
-                ctx.log.info(s"$nodeId - Ack received")
-                Behaviors.same
-            }
+          case _ =>
+            None
         }
-      }
+
+      case _ =>
+        None
     }
   }
+
+  override protected def onMessage(ctx: ActorContext[DistributedMessage], msg: DistributedMessage): Behavior[DistributedMessage] =
+    Behaviors.same
 }

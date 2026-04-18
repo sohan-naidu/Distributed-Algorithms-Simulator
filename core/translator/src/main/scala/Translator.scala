@@ -3,17 +3,26 @@ package translator
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.actor.typed.scaladsl.Behaviors
 import com.typesafe.scalalogging.LazyLogging
-import com.uic.cs553.distributed.framework.{CommonMessages, DistributedMessage}
+import com.uic.cs553.distributed.framework.{CommonMessages, DistributedMessage, NetworkMessage}
 import enricher.{EnrichedEdge, EnrichedGraph, GraphIO, LoadedGraph}
-import algorithms.HirschbergSinclairNode
+import algorithms.{HirschbergSinclairNode, MessageConverter}
 import core.Message
+import translator.{Algorithm, InjectionMode}
 
-enum Algorithm:
-  case HirschbergSinclair, TreeElection
+import scala.concurrent.duration.DurationInt
+import java.util.IllegalFormatException
+import scala.io.Source
+import scala.util.Using
+import io.circe.parser.decode
+import translator.InjectionMode.File
+
+import scala.concurrent.ExecutionContext
 
 object Translator extends LazyLogging:
 
-  def run(inputPath: String, algorithm: String): Unit = {
+  def run(inputPath: String, algorithm: String, injectionMode: String): Unit = {
+    val im = InjectionMode.parse(injectionMode).getOrElse(throw new IllegalArgumentException("Invalid injection mode"))
+    val algo = Algorithm.parse(algorithm).getOrElse(throw new IllegalArgumentException("Invalid algorithm"))
     val graph = GraphIO.load(inputPath)
     val enrichedGraph = graph match
       case Right(LoadedGraph.Enriched(enriched)) =>
@@ -22,9 +31,10 @@ object Translator extends LazyLogging:
         throw new RuntimeException("Expected raw graph but file is already enriched")
       case Left(err) =>
         throw new RuntimeException(err)
-    val algo = Algorithm.valueOf(algorithm)
-    val (system, actors) = translate(enrichedGraph, algo)
+    val (system, actors, inputNodes) = translate(enrichedGraph, algo)
     logger.info("Translated graph to Akka system")
+    if im == InjectionMode.File then
+      inject(system, actors, inputNodes, readInputFile("C:\\Users\\sohan\\Projects\\Distributed-Algorithms-Simulator\\input\\input.json"))
     initializeNeighbors(actors, enrichedGraph.edges)
     logger.info("Neighbors initialized")
     startActors(actors)
@@ -34,7 +44,7 @@ object Translator extends LazyLogging:
   }
 
   private def translate(graph: EnrichedGraph, algorithm: Algorithm
-                       ): (ActorSystem[Nothing], Map[Int, ActorRef[DistributedMessage]]) =
+                       ): (ActorSystem[Nothing], Map[Int, ActorRef[DistributedMessage]], Set[Int]) =
     val system = ActorSystem(Behaviors.empty, "distributed-algorithms-simulator")
 
     val edgesMap: Map[Int, Map[Int, Set[Message]]] =
@@ -45,14 +55,26 @@ object Translator extends LazyLogging:
           edges.groupMapReduce(_.toId)(_.allowedMessages)(_ union _)
         }
         .toMap
-    val actors = graph.nodes.map { node =>
-      val behavior = algorithm match
-        case Algorithm.HirschbergSinclair => HirschbergSinclairNode(node, edgesMap.getOrElse(node.id, Map.empty))
-//        case Algorithm.TreeElection       => TreeElectionNode(node)
-      node.id -> system.systemActorOf(behavior, s"${node.id}")
+
+    val ringNeighbors: Map[Int, (Int, Int)] = extractRingNeighbors(graph.edges)
+    val actors: Map[Int, ActorRef[DistributedMessage]] = graph.nodes.distinctBy(_.id).map{ node =>
+      val (leftId, rightId) = ringNeighbors(node.id)
+      logger.info(s"Spawning actor for node ${node.id}, left=$leftId, right=$rightId")
+      node.id -> system.systemActorOf(
+        algorithm match
+          case Algorithm.HirschbergSinclair =>
+            HirschbergSinclairNode(node, edgesMap.getOrElse(node.id, Map.empty),
+              leftId, rightId, graph.nodes.size)
+        ,
+        s"${node.id}"
+      )
     }.toMap
 
-    (system, actors)
+    val inputNodes: Set[Int] = graph.nodes.collect {
+      case node if node.isInput => node.id
+    }.toSet
+
+    (system, actors, inputNodes)
 
   private def initializeNeighbors(actors: Map[Int, ActorRef[DistributedMessage]], edges: List[EnrichedEdge]
                                  ): Unit =
@@ -70,3 +92,61 @@ object Translator extends LazyLogging:
 
   private def startActors(actors: Map[Int, ActorRef[DistributedMessage]]): Unit =
     actors.values.foreach(_ ! CommonMessages.Start())
+
+  private def readInputFile(inputPath: String): List[Injectable] = {
+    Using(Source.fromFile(inputPath)) { source =>
+      val lines = source.getLines().toList
+      require(lines.size == 1, "The input file is not formatted correctly")
+      decode[List[Injectable]](lines.head).fold(err =>
+          throw new IllegalArgumentException(s"Input file decode failed: ${err.getMessage}"), identity)
+    }.get
+  }
+
+  private def inject(system: ActorSystem[Nothing], actors: Map[Int, ActorRef[DistributedMessage]],
+                     inputNodes: Set[Int], injectables: List[Injectable]): Unit = {
+    injectables.foreach(injectable =>
+      require(
+        inputNodes(injectable.nodeId),
+        s"nodeId ${injectable.nodeId} is not an input node"
+      )
+      require(
+        injectable.atTimeMs >= 0,
+        s"atTimeMs must be >= 0, got ${injectable.atTimeMs}"
+      )
+      require(
+        Message.values.contains(injectable.message),
+        s"invalid message type ${injectable.message}"
+      )
+      implicit val ec: ExecutionContext = system.executionContext
+      actors.get(injectable.nodeId) match {
+        case Some(ref) =>
+          system.scheduler.scheduleOnce(injectable.atTimeMs.millis,
+            new Runnable {
+              override def run(): Unit =
+                ref ! NetworkMessage("INJECTED", ref.path.name, MessageConverter.toNodeMessage(injectable.message)
+                )
+            })
+        case None => logger.error(s"Cannot inject to non-existant node ${injectable.nodeId}")
+      }
+    )
+  }
+
+  private def extractRingNeighbors(edges: List[EnrichedEdge]): Map[Int, (Int, Int)] = {
+    val adj: Map[Int, List[Int]] = edges
+      .groupBy(_.fromId)
+      .map((k, v) => k -> v.map(_.toId))
+
+    val ring = scala.collection.mutable.ArrayBuffer[Int]()
+    var prev = -1
+    var cur = adj.keys.min
+    while ring.size < adj.size do
+      ring += cur
+      val next = adj(cur).find(_ != prev).get
+      prev = cur
+      cur = next
+
+    val n = ring.size
+    ring.zipWithIndex.map { (nodeId, i) =>
+      nodeId -> (ring((i - 1 + n) % n), ring((i + 1) % n))
+    }.toMap
+  }
