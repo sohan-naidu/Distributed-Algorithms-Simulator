@@ -17,7 +17,7 @@ object ConfigLoader extends LazyLogging {
     path match
       case Some(p) =>
         logger.info(s"Overriding default generator config with values in $p")
-        ConfigFactory.parseFile(new java.io.File(p)).withFallback(config)
+        ConfigFactory.parseFile(new java.io.File(p)).withFallback(config).resolve()
       case None =>
         config
 
