@@ -2,7 +2,11 @@
 
 ## Overview
 
-This project implements a distributed systems simulator that maps graph topologies to Akka actors. Each graph node becomes one actor and each directed edge becomes an outgoing communication channel to a destination ActorRef. The simulator supports configurable workloads, message filtering, randomized traffic generation, interactive and file-driven message injection, and leader-election algorithms.
+This project implements a distributed systems simulator that maps graph topologies to Akka actors. 
+Each graph node becomes one actor and each directed edge becomes an outgoing communication channel to a destination ActorRef. 
+The simulator supports configurable workloads, message filtering, randomized traffic generation, 
+interactive and file-driven message injection, and leader-election algorithms. It is based off of the 
+[CS553 course project](https://github.com/0x1DOCD00D/CS553_2026/blob/main/CourseProject.MD) taught at UIC during Spring 2026, and uses [NetGameSim](github.com/0x1DOCD00D/NetGameSim/blob/main/build.sbt) to generate random graphs.
 
 ## Implemented Features
 
@@ -22,10 +26,12 @@ This project implements a distributed systems simulator that maps graph topologi
 ## Repository Structure
 
 * `core/generator` - graph generation - NetGameSim submodule
-* `core/enricher` - graph enrichment / labels
+* `core/enricher` - graph enrichment
 * `core/translator` - runtime simulator
 * `core/algorithms` - distributed algorithms
 * `core/framework` - shared runtime framework - CS553 as submodule
+
+# Quickstart
 
 ## Requirements
 
@@ -50,7 +56,7 @@ $env:AKKA_TOKEN="your-token"
 
 ## Clean Build
 
-```
+```bash
 git clone --recursive https://github.com/sohan-naidu/Distributed-Algorithms-Simulator.git
 cd Distributed-Algorithms-Simulator/
 cd core/generator && sbt clean compile assembly
@@ -58,62 +64,24 @@ cd ../..
 sbt clean compile test
 ```
 
-## Sample Configuration for Hirschberg-Sinclair
+## Simulate Hirschberg-Sinclair
 
-### Step 1: Generate Graph
-### Requires Bidirectional Chain Structure. Replace the contents of `application.conf` with `sim-hs.conf` before running.
-### The conf files can be found in `core/src/main/resources/`
+To help with deterministic testing, sample outputs have been generated and are available at `output/experiments/`
 ```bash
-sbt "cli/run generate"
+sbt "cli/run simulate --config core/src/main/resources/sim-hs.conf --algorithm hs --inject interactive --duration 30" 
+```
+Then inject messages. Please note, for this config, nodes 3, 5 and 10 are the only input nodes.
+```
+inject 5 Ping
+inject 10 Election
 ```
 
-Generated files are written to `output/generated/`.
-
-## Step 2 - Enrich Graphs
-
-Attach labels / metadata to edges. The generated graph may be different from the edge constraints present in `application.conf`. 
-These are present for demonstration purposes. Please uncomment and update the constraints according to the generated file as it may fail fast.
+## Simulate Tree Election
 
 ```bash
-sbt "cli/run enrich"
+sbt "cli/run simulate --config core/src/main/resources/sim-te.conf --algorithm te --inject file --duration 30"
 ```
-The enriched output can be seen in `output/enriched/`
-
-## Step 3 - Run the Simulator
-
-```bash
-sbt "cli/run simulate --algorithm hs --inject file --duration 60"
-```
-
-## Sample Configuration for Tree Election
-
-### Replace the contents of `application.conf` with `sim-te.conf` before running.
-
-## Step 1: Generate Graph
-```bash
-sbt "cli/run generate"
-```
-You might have to run it with the `clear` flag if a graph was generated previously.
-```
-sbt "cli/run generate --clear"
-```
-
-Generated files are written to `output/generated/`.
-
-## Step 2 - Enrich Graphs
-
-Attach labels / metadata to edges.
-
-```bash
-sbt "cli/run enrich"
-```
-The enriched output can be seen in `output/enriched/`
-
-## Step 3 - Run the Simulator
-
-```bash
-sbt "cli/run simulate --algorithm te --inject interactive --duration 30"
-```
+File injections are define in `input/input.json`
 
 ## Injection Modes
 

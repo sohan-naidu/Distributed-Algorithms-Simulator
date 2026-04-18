@@ -5,6 +5,8 @@ object Constants {
   val GENERATOR: String = "generator"
   val ENRICHER: String = "enricher"
   val TRANSLATOR: String = "translator"
+  val SIM: String = ".sim"
+  val DOT: String = ".dot"
 
   val FILE: String = "file"
   val INTERACTIVE: String = "interactive"

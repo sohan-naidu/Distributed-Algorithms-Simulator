@@ -1,6 +1,7 @@
 package enricher
 
 import com.typesafe.scalalogging.LazyLogging
+import core.Constants
 import guru.nidi.graphviz.attribute.{Color, Label}
 import guru.nidi.graphviz.engine.{Format, Graphviz, GraphvizCmdLineEngine}
 import io.circe.generic.auto.*
@@ -10,7 +11,7 @@ import io.circe.syntax.*
 import java.io.{File, PrintWriter}
 import java.util.concurrent.TimeUnit
 import scala.io.Source
-import scala.util.{Try, Using, Success, Failure}
+import scala.util.{Failure, Success, Try, Using}
 import guru.nidi.graphviz.model.Factory.{graph, linkAttrs, node, to}
 import guru.nidi.graphviz.model.{Graph, Node}
 
@@ -60,18 +61,18 @@ object GraphIO extends LazyLogging{
         Left(s"Failed to open/read file '$path': ${err.getMessage}")
 
   def write(path: String, graph: EnrichedGraph): Unit = {
-    Using.resource(new PrintWriter(path)) { pw =>
+    Using.resource(new PrintWriter(path + Constants.SIM)) { pw =>
       pw.println(graph.nodes.asJson.noSpaces)
       pw.println(graph.edges.asJson.noSpaces)
     }
-    writeToDotFormat(graph) match
+    writeToDotFormat(graph, path) match
       case Success(file) =>
         logger.info(s"Successfully wrote enriched graph to ${file.getName}")
       case Failure(e) =>
         logger.error("Failed to render the graph to enriched.dot", e)
   }
 
-  private def writeToDotFormat(enrichedGraph: EnrichedGraph): Try[File] = {
+  private def writeToDotFormat(enrichedGraph: EnrichedGraph, outputPath: String): Try[File] = {
     val nodes = enrichedGraph.nodes
     if !nodes.exists(_.id == 0) then
       logger.warn("The graph does not contain a start node with id 0")
@@ -105,7 +106,7 @@ object GraphIO extends LazyLogging{
       val cmdlnEngine = new GraphvizCmdLineEngine()
       cmdlnEngine.timeout(2, TimeUnit.MINUTES)
       Graphviz.useEngine(cmdlnEngine)
-      Graphviz.fromGraph(g).render(Format.DOT).toFile(new File("output/enriched/enriched.dot"))
+      Graphviz.fromGraph(g).render(Format.DOT).toFile(new File(s"${outputPath + Constants.DOT}"))
     }
   }
 }

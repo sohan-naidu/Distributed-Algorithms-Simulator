@@ -13,9 +13,9 @@ sealed trait Command
 object Command {
   final case class Generate(configPath: Option[String], clearFlag: Boolean) extends Command
   final case class Enrich(configPath: Option[String], clearFlag: Boolean) extends Command
-  final case class Simulate(algorithm: String, injectionMode: String, duration: Int) extends Command
-  final case class Pipeline(generatorConfigPath: Option[String], enricherConfigPath: Option[String],
-                             algorithm: String, clearFlag: Boolean, injectionMode: String, duration: Int) extends Command
+  final case class Simulate(configPath: Option[String], algorithm: String, injectionMode: String, duration: Int) extends Command
+  final case class Pipeline(generatorConfigPath: Option[String], enricherConfigPath: Option[String], 
+                            translatorConfig: Option[String], algorithm: String, clearFlag: Boolean, injectionMode: String, duration: Int) extends Command
 }
 
 object Main extends CommandApp(
@@ -33,6 +33,9 @@ object CommandLineInterface extends LazyLogging {
 
   private val enricherConfig: Opts[Option[String]] =
     Opts.option[String]("config", help = "Path to enricher config").orNone
+
+  private val translatorConfig: Opts[Option[String]] =
+    Opts.option[String]("config", help = "Path to translator config").orNone
 
   private val algorithm: Opts[String] =
     Opts.option[String]("algorithm", help = "Algorithm to simulate")
@@ -62,12 +65,12 @@ object CommandLineInterface extends LazyLogging {
 
   private val simulate: Opts[Command] =
     Opts.subcommand("simulate", "Simulate an algorithm") {
-      (algorithm, injectionMode, duration).mapN(Command.Simulate.apply)
+      (translatorConfig, algorithm, injectionMode, duration).mapN(Command.Simulate.apply)
     }
 
   private val pipeline: Opts[Command] =
     Opts.subcommand("pipeline", "Run generate, enrich, and simulate in sequence") {
-      (pipelineGeneratorConfig, pipelineEnricherConfig, algorithm, clearFlag, injectionMode, duration)
+      (pipelineGeneratorConfig, pipelineEnricherConfig, translatorConfig, algorithm, clearFlag, injectionMode, duration)
         .mapN(Command.Pipeline.apply)
     }
 
@@ -82,15 +85,15 @@ object CommandLineInterface extends LazyLogging {
       case Command.Enrich(configPath, clearFlag) =>
         runEnrich(configPath, clearFlag)
 
-      case Command.Simulate(algorithm, injectionMode, duration) =>
-        runSimulate(algorithm, injectionMode, duration)
+      case Command.Simulate(configPath, algorithm, injectionMode, duration) =>
+        runSimulate(configPath, algorithm, injectionMode, duration)
 
-      case Command.Pipeline(generatorConfigPath, enricherConfigPath, 
+      case Command.Pipeline(generatorConfigPath, enricherConfigPath, translatorConfig,
         algorithm, clearFlag, injectionMode, duration) =>
         if (clearFlag) clear()
         runGenerate(generatorConfigPath, clearFlag = false)
         runEnrich(enricherConfigPath, clearFlag = false)
-        runSimulate(algorithm, injectionMode, duration)
+        runSimulate(translatorConfig, algorithm, injectionMode, duration)
     }
 
   private def runGenerate(configPath: Option[String], clearFlag: Boolean): Unit = {
@@ -130,8 +133,8 @@ object CommandLineInterface extends LazyLogging {
     )
   }
 
-  private def runSimulate(algorithm: String, injectionMode: String, duration: Int): Unit = {
-    val translatorConfig = ConfigLoader.getTranslatorConfig(None)
+  private def runSimulate(configPath: Option[String], algorithm: String, injectionMode: String, duration: Int): Unit = {
+    val translatorConfig = ConfigLoader.getTranslatorConfig(configPath)
     Translator.run(translatorConfig.enrichedOutputFilePath, algorithm, 
       injectionMode, translatorConfig.injectFilePath, duration)
   }
