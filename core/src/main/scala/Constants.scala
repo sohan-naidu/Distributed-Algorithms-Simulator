@@ -8,6 +8,7 @@ object Constants {
 
   val FILE: String = "file"
   val INTERACTIVE: String = "interactive"
+  val INJECTED: String = "INJECTED"
   
   val JAR_PATH = "jarPath"
   val MIN_MEMORY = "minimumMemory"

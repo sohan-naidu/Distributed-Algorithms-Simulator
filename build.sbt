@@ -48,7 +48,7 @@ lazy val enricher = (project in file("core/enricher"))
 lazy val framework = (project in file("core/framework"))
 
 lazy val algorithms = (project in file("core/algorithms"))
-  .dependsOn(enricher, framework)
+  .dependsOn(enricher, framework, core)
 
 lazy val translator = (project in file("core/translator"))
   .dependsOn(core, enricher, framework, algorithms)
