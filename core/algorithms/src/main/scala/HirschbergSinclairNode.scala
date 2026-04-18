@@ -17,6 +17,9 @@ class HirschbergSinclairNode(node: EnrichedNode, edges: Map[Int, Set[Message]],
                              left: Int, right: Int, graphSize: Int)
   extends BaseLeaderElectionNode(node, edges) {
 
+  // Set once during Initialize before any algorithm messages are processed. Done to avoid chicken-and-egg 
+  // problem of actor refs not existing until after construction, but construction requires knowing neighbors.
+  // These are never changed after assignment, so technically read-only var 
   private var leftPeer: ActorRef[DistributedMessage] = _
   private var rightPeer: ActorRef[DistributedMessage] = _
 
@@ -26,15 +29,12 @@ class HirschbergSinclairNode(node: EnrichedNode, edges: Map[Int, Set[Message]],
     message match
       case CommonMessages.Initialize(peerRefs) =>
         val peerNames = peerRefs.map(_.path.name)
-        ctx.log.info(s"Node $nodeId initializing, peers=$peerNames, leftId=$left, rightId=$right")
         leftPeer = peerRefs.find(_.path.name == left.toString).getOrElse(
           throw new RuntimeException(s"Node $nodeId: leftId $left not found in peers $peerNames")
         )
         rightPeer = peerRefs.find(_.path.name == right.toString).getOrElse(
           throw new RuntimeException(s"Node $nodeId: rightId $right not found in peers $peerNames")
         )
-//        leftPeer = peerRefs.find(_.path.name == left.toString).get
-//        rightPeer = peerRefs.find(_.path.name == right.toString).get
         Some(super.handleBackgroundChatter(ctx, timers, message).getOrElse(Behaviors.same))
       case _ =>
         super.handleBackgroundChatter(ctx, timers, message)

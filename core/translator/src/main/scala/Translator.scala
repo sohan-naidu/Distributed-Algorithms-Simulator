@@ -4,9 +4,9 @@ import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.actor.typed.scaladsl.Behaviors
 import com.typesafe.scalalogging.LazyLogging
 import com.uic.cs553.distributed.framework.{CommonMessages, DistributedMessage, NetworkMessage}
-import enricher.{EnrichedEdge, EnrichedGraph, GraphIO, LoadedGraph}
-import algorithms.{HirschbergSinclairNode, MessageConverter}
-import core.Message
+import enricher.{EnrichedEdge, EnrichedGraph, GraphIO, LoadedGraph, RawEdge}
+import algorithms.{HirschbergSinclairNode, MessageConverter, TreeElectionNode}
+import core.{Message, Topology}
 import translator.{Algorithm, InjectionMode}
 
 import scala.concurrent.duration.DurationInt
@@ -43,7 +43,7 @@ object Translator extends LazyLogging:
     system.terminate()
   }
 
-  private def translate(graph: EnrichedGraph, algorithm: Algorithm
+  private def translate(graph: EnrichedGraph, algorithm: Algorithm,
                        ): (ActorSystem[Nothing], Map[Int, ActorRef[DistributedMessage]], Set[Int]) =
     val system = ActorSystem(Behaviors.empty, "distributed-algorithms-simulator")
 
@@ -56,15 +56,19 @@ object Translator extends LazyLogging:
         }
         .toMap
 
-    val ringNeighbors: Map[Int, (Int, Int)] = extractRingNeighbors(graph.edges)
     val actors: Map[Int, ActorRef[DistributedMessage]] = graph.nodes.distinctBy(_.id).map{ node =>
-      val (leftId, rightId) = ringNeighbors(node.id)
-      logger.info(s"Spawning actor for node ${node.id}, left=$leftId, right=$rightId")
       node.id -> system.systemActorOf(
         algorithm match
           case Algorithm.HirschbergSinclair =>
+            val ringNeighbors: Map[Int, (Int, Int)] = extractRingNeighbors(graph.edges)
+            val (leftId, rightId) = ringNeighbors(node.id)
             HirschbergSinclairNode(node, edgesMap.getOrElse(node.id, Map.empty),
               leftId, rightId, graph.nodes.size)
+
+          case Algorithm.TreeElection =>
+            val treeStructure: Map[Int, (Option[Int], List[Int])] = buildTreeStructure(0, graph.edges)
+            val (parent, children) = treeStructure(node.id)
+            TreeElectionNode(node, edgesMap.getOrElse(node.id, Map.empty), parent, children)
         ,
         s"${node.id}"
       )
@@ -131,10 +135,11 @@ object Translator extends LazyLogging:
     )
   }
 
+  private def getUndirectedAdjacency(edges: List[EnrichedEdge]): Map[Int, List[Int]] =
+    edges.groupBy(_.fromId).map((k, v) => k -> v.map(_.toId))
+
   private def extractRingNeighbors(edges: List[EnrichedEdge]): Map[Int, (Int, Int)] = {
-    val adj: Map[Int, List[Int]] = edges
-      .groupBy(_.fromId)
-      .map((k, v) => k -> v.map(_.toId))
+    val adj = getUndirectedAdjacency(edges)
 
     val ring = scala.collection.mutable.ArrayBuffer[Int]()
     var prev = -1
@@ -148,5 +153,27 @@ object Translator extends LazyLogging:
     val n = ring.size
     ring.zipWithIndex.map { (nodeId, i) =>
       nodeId -> (ring((i - 1 + n) % n), ring((i + 1) % n))
+    }.toMap
+  }
+
+  private def buildTreeStructure(rootId: Int, edges: List[EnrichedEdge]): Map[Int, (Option[Int], List[Int])] = {
+    // Deduplicate edges
+    val adj = getUndirectedAdjacency(edges)
+
+    val parent = scala.collection.mutable.Map[Int, Option[Int]](rootId -> None)
+    val children = scala.collection.mutable.Map[Int, List[Int]]().withDefaultValue(Nil)
+    val queue = scala.collection.mutable.Queue(rootId)
+
+    while queue.nonEmpty do
+      val node = queue.dequeue()
+      adj.getOrElse(node, Nil).foreach { neighbor =>
+        if !parent.contains(neighbor) then
+          parent(neighbor) = Some(node)
+          children(node) = children(node) :+ neighbor
+          queue.enqueue(neighbor)
+      }
+
+    parent.keys.map { id =>
+      id -> (parent(id), children(id))
     }.toMap
   }

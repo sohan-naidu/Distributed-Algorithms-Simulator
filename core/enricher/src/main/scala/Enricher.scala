@@ -1,11 +1,11 @@
 package enricher
 
 import com.typesafe.scalalogging.LazyLogging
-import core.{EdgeOverride, EdgesConfig, Message, NodeOverride, NodesConfig}
+import core.*
 
 object Enricher extends LazyLogging {
   def run(inputPath: String, nodesConfig: NodesConfig,
-          edgesConfig: EdgesConfig, ring: Boolean, outputPath: String): Unit = {
+          edgesConfig: EdgesConfig, topology: String, outputPath: String): Unit = {
     val graph = GraphIO.load(inputPath)
     val rawGraph = graph match
       case Right(LoadedGraph.Raw(raw)) =>
@@ -15,7 +15,7 @@ object Enricher extends LazyLogging {
       case Left(err) =>
         throw new RuntimeException(err)
 
-    val enriched = enrich(rawGraph, nodesConfig, edgesConfig, ring)
+    val enriched = enrich(rawGraph, nodesConfig, edgesConfig, topology)
     GraphIO.write(outputPath, enriched)
   }
 
@@ -37,8 +37,16 @@ object Enricher extends LazyLogging {
     }
   }
 
-  private def enrich(graph: RawGraph, nodesConfig: NodesConfig, edgesConfig: EdgesConfig, ring: Boolean): EnrichedGraph = {
-    val updatedGraph = if (ring) graph.copy(edges = constructRing(graph.edges)) else graph
+  private def enrich(graph: RawGraph, nodesConfig: NodesConfig, edgesConfig: EdgesConfig,
+                     topology: String): EnrichedGraph = {
+    val topo = Topology.parse(topology).getOrElse {
+      throw new IllegalArgumentException(s"Unknown topology: $topology")
+    }
+    val updatedGraph = topo match {
+      case Topology.Ring => graph.copy(edges = constructRing(graph.edges))
+      case Topology.Tree => graph.copy(edges = extractMST(graph.edges))
+    }
+
     val bidirectionalGraph = updatedGraph.copy(edges = makeBidirectional(updatedGraph.edges))
     validateNodesConfigOverrides(bidirectionalGraph.nodes, nodesConfig.overrides)
     validateEdgesConfigOverrides(bidirectionalGraph.edges, edgesConfig.overrides)
@@ -85,17 +93,44 @@ object Enricher extends LazyLogging {
         case (node, count) if count == 1 => node
       }.toList
 
-    // Expect exactly two loose ends
     require(
       endpoints.size == 2,
       s"Cannot convert graph to a ring. Expected exactly 2 endpoints, found ${endpoints.size}"
     )
     logger.info("Successfully constructed a ring")
-    edges :+ RawEdge(fromNode = endpoints.head, toNode = endpoints(1))
+    edges :+ RawEdge(fromNode = endpoints.head, toNode = endpoints(1), weight = 0.0)
 
   private def makeBidirectional(edges: List[RawEdge]): List[RawEdge] = {
     edges.flatMap { e =>
       List(e, e.copy(fromNode = e.toNode, toNode = e.fromNode))
     }.distinct
   }
+
+  private def extractMST(edges: List[RawEdge]): List[RawEdge] =
+    val nodes = edges.flatMap(e => List(e.fromNode, e.toNode)).distinct
+
+    val parent = scala.collection.mutable.Map[Int, Int]()
+    nodes.foreach(n => parent(n) = n)
+
+    def find(x: Int): Int =
+      if parent(x) != x then
+        parent(x) = find(parent(x))
+      parent(x)
+
+    def union(a: Int, b: Int): Unit =
+      parent(find(a)) = find(b)
+
+    val sorted = edges.sortBy(_.weight)
+
+    val mst = scala.collection.mutable.ListBuffer[RawEdge]()
+
+    sorted.foreach { edge =>
+      val rootA = find(edge.fromNode)
+      val rootB = find(edge.toNode)
+
+      if rootA != rootB then
+        mst += edge
+        union(rootA, rootB)
+    }
+    mst.toList
 }

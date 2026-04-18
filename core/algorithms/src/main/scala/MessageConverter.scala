@@ -18,5 +18,5 @@ object MessageConverter:
       case PONG                         => Message.Pong
       case WORK                         => Message.Work
       case ACK                          => Message.Ack
-      case ELECTION | _: PROBE | _: REPLY | _: LEADER =>
+      case ELECTION | _: PROBE | _: REPLY | _: LEADER | START | _: VOTE | _: TREE_LEADER =>
         Message.Election

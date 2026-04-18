@@ -15,3 +15,8 @@ case object ELECTION extends NodeMessage
 case class PROBE(candidateId: String, phase: Int, hops: Int, epoch: Int, direction: Direction) extends NodeMessage
 case class REPLY(candidateId: String, phase: Int, epoch: Int, localWinner: Boolean, direction: Direction) extends NodeMessage
 case class LEADER(candidateId: String, epoch: Int, direction: Direction) extends NodeMessage
+
+case object START extends NodeMessage
+
+case class VOTE(maximumId: Int) extends NodeMessage
+case class TREE_LEADER(leaderId: Int) extends NodeMessage

@@ -2,7 +2,7 @@ package core
 
 final case class EnricherConfig (
   genOutputFilePath: String,
-  ring: Boolean,
+  topology: String,
   messages: Set[Message],
   nodes: NodesConfig,
   edges: EdgesConfig,
