@@ -57,14 +57,19 @@ object Enricher extends LazyLogging {
   }
 
   private def applyNodeConfigs(nodes: List[RawNode], config: NodesConfig): List[EnrichedNode] =
+    val defaultPdf =
+      Option.when(config.defaultPdf.nonEmpty)(config.defaultPdf)
+        .getOrElse(PDFSampler.fromConfig(config.distribution, config.seed))
     val overrideMap = config.overrides.map(o => o.id -> o).toMap
     nodes.map { node =>
       overrideMap.get(node.id) match
         case None =>
-          EnrichedNode(id = node.id, pdf = config.defaultPdf,
-            tickIntervalMs = None)
+          EnrichedNode(id = node.id, pdf = defaultPdf, tickIntervalMs = None)
         case Some(o) =>
-          EnrichedNode(id = node.id, pdf = o.pdf.getOrElse(config.defaultPdf),
+          val pdf = o.pdf.getOrElse(
+            PDFSampler.fromConfig(config.distribution, config.seed + node.id)
+          )
+          EnrichedNode(id = node.id, pdf = pdf,
             tickIntervalMs = o.tickIntervalMs, isInput = o.isInput.getOrElse(false))
     }
 

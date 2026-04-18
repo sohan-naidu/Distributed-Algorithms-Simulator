@@ -11,7 +11,9 @@ lazy val commonDependencies = Seq(
   "io.circe" %% "circe-parser"  % "0.14.6",
   "com.typesafe" % "config" % "1.4.3",
   "com.github.pureconfig" %% "pureconfig-core" % "0.17.10",
-  "com.github.pureconfig" %% "pureconfig-generic-scala3" % "0.17.10"
+  "com.github.pureconfig" %% "pureconfig-generic-scala3" % "0.17.10",
+  "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+  "org.scalatestplus" %% "mockito-5-12" % "3.2.19.0" % Test
 )
 
 lazy val cli = (project in file("cli"))
@@ -49,6 +51,9 @@ lazy val framework = (project in file("core/framework"))
 
 lazy val algorithms = (project in file("core/algorithms"))
   .dependsOn(enricher, framework, core)
+  .settings(
+    libraryDependencies ++= commonDependencies
+  )
 
 lazy val translator = (project in file("core/translator"))
   .dependsOn(core, enricher, framework, algorithms)

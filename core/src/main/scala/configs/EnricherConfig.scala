@@ -9,7 +9,13 @@ final case class EnricherConfig (
   enrichedOutputFilePath: String
 )
 
+enum Distribution:
+  case Uniform
+  case Zipf(exponent: Double = 1.0)
+
 final case class NodesConfig (
+  distribution: Distribution = Distribution.Uniform,
+  seed: Long = 42L,
   defaultPdf: Map[Message, Double],
   overrides: List[NodeOverride] = Nil
 )
