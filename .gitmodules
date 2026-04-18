@@ -3,4 +3,4 @@
 	url = https://github.com/0x1DOCD00D/NetGameSim.git
 [submodule "CS553_2026"]
 	path = core/framework
-	url = https://github.com/0x1DOCD00D/CS553_2026.git
+	url = https://github.com/sohan-naidu/CS553_2026
