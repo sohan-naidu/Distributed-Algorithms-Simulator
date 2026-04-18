@@ -52,9 +52,9 @@ $env:AKKA_TOKEN="your-token"
 
 ```
 git clone --recursive https://github.com/sohan-naidu/Distributed-Algorithms-Simulator.git
-```
-
-```bash
+cd Distributed-Algorithms-Simulator/
+cd generator && sbt clean compile assembly
+cd ../..
 sbt clean compile test
 ```
 
@@ -62,6 +62,7 @@ sbt clean compile test
 
 ### Step 1: Generate Graph
 ### Requires Bidirectional Chain Structure. Replace the contents of `application.conf` with `sim-hs.conf` before running.
+### The conf files can be found in `core/src/main/resources/`
 ```bash
 sbt "cli/run generate"
 ```
