@@ -5,6 +5,9 @@ object Constants {
   val GENERATOR: String = "generator"
   val ENRICHER: String = "enricher"
   val TRANSLATOR: String = "translator"
+
+  val FILE: String = "file"
+  val INTERACTIVE: String = "interactive"
   
   val JAR_PATH = "jarPath"
   val MIN_MEMORY = "minimumMemory"

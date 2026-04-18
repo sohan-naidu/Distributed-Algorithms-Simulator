@@ -1,5 +1,3 @@
-import scala.collection.Seq
-
 ThisBuild / scalaVersion := "3.3.4"
 
 lazy val commonDependencies = Seq(
