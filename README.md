@@ -53,7 +53,7 @@ $env:AKKA_TOKEN="your-token"
 ```
 git clone --recursive https://github.com/sohan-naidu/Distributed-Algorithms-Simulator.git
 cd Distributed-Algorithms-Simulator/
-cd generator && sbt clean compile assembly
+cd core/generator && sbt clean compile assembly
 cd ../..
 sbt clean compile test
 ```
@@ -71,7 +71,8 @@ Generated files are written to `output/generated/`.
 
 ## Step 2 - Enrich Graphs
 
-Attach labels / metadata to edges.
+Attach labels / metadata to edges. The generated graph may be different from the edge constraints present in `application.conf`. 
+These are present for demonstration purposes. Please uncomment and update the constraints according to the generated file as it may fail fast.
 
 ```bash
 sbt "cli/run enrich"
@@ -91,6 +92,10 @@ sbt "cli/run simulate --algorithm hs --inject file --duration 60"
 ## Step 1: Generate Graph
 ```bash
 sbt "cli/run generate"
+```
+You might have to run it with the `clear` flag if a graph was generated previously.
+```
+sbt "cli/run generate --clear"
 ```
 
 Generated files are written to `output/generated/`.
