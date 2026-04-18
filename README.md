@@ -50,6 +50,10 @@ $env:AKKA_TOKEN="your-token"
 
 ## Clean Build
 
+```
+git clone --recursive https://github.com/sohan-naidu/Distributed-Algorithms-Simulator.git
+```
+
 ```bash
 sbt clean compile test
 ```
