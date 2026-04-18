@@ -36,7 +36,7 @@ When any node receives an `ELECTION` message, if it is not the root node, i.e., 
 sends the message upwards without changing its state. Once root sees `ELECTION`, it sends `START` message down and switches from `idle` to 
 `running`. This message is specifically for leaf nodes to start a convergecast. All other intermediary nodes forward the message and 
 switch to `running` anticipating their subtrees to send the local maximum ID back up. Once leaf nodes receive `START`, 
-they send `VOTE` along with their own ID back up and essentially `idle` again. The parent node waits for all their chidlren
+they send `VOTE` along with their own ID back up. The parent node waits for all their children
 to send a `VOTE` after which a maximum ID is chose from among the subtree and self, and sent back up. After the root node receives
 `VOTE` from all its children, a global maximum is selected and broadcast back down through `LEADER`.
 
