@@ -1,82 +1,163 @@
-# Distributed-Algorithms-Simulator
+# Distributed Algorithms Simulator
 
-## Getting Started
-This project uses [NetGameSim](https://github.com/0x1DOCD00D/NetGameSim) and my fork of UIC's [CS553 course repository](https://github.com/0x1DOCD00D/CS553_2026/tree/main) taught during 2026 as submodules.
-The fork has an updated `build.sbt` to use a newer version of Akka typed and Scala 
-```
-git clone --recursive https://github.com/sohan-naidu/Distributed-Algorithms-Simulator.git
+## Overview
+
+This project implements a distributed systems simulator that maps graph topologies to Akka actors. Each graph node becomes one actor and each directed edge becomes an outgoing communication channel to a destination ActorRef. The simulator supports configurable workloads, message filtering, randomized traffic generation, interactive and file-driven message injection, and leader-election algorithms.
+
+## Implemented Features
+
+* Graph to actor runtime translation
+* Configurable graph generation
+* Graph enrichment / edge labeling
+* Message filtering based on labels
+* File-driven injection mode
+* Interactive injection mode
+* Timer-based randomized message generation with configurable probabilities
+* Metrics via Cinnamon / Akka Insights
+* Two distributed algorithms:
+
+    * Hirschberg-Sinclair Leader Election
+    * Tree Election
+
+## Repository Structure
+
+* `core/generator` - graph generation - NetGameSim submodule
+* `core/enricher` - graph enrichment / labels
+* `core/translator` - runtime simulator
+* `core/algorithms` - distributed algorithms
+* `core/framework` - shared runtime framework - CS553 as submodule
+
+## Requirements
+
+* Java 17+
+* sbt
+* Internet connection for dependency resolution
+* Optional: Akka token for Cinnamon dependencies
+
+## Environment Setup
+
+### macOS / Linux
+
+```bash
+export AKKA_TOKEN="your-token"
 ```
 
-## Quick Start
-Set Akka token. If on Windows,
-```
-set $env:AKKA_TOKEN=<your-akka-token>
-```
-On MacOS/Linux
-```
-export AKKA_TOKEN="<your-akka-token>"
-```
-Optionally, these can be set in your `.bashrc` or `.zsh` or Windows environmental variables
+### Windows PowerShell
 
-For testing
+```powershell
+$env:AKKA_TOKEN="your-token"
 ```
+
+## Clean Build
+
+```bash
 sbt clean compile test
 ```
 
-NetGameSim's jar needs to be built as the primary step. Ignore if the jar is built. However, the path to the jar will have to 
-be passed each time a new graph needs to be generated.
-```
-cd core/generator && sbt clean compile assembly
-```
+## Sample Configuration for Hirschberg-Sinclair
 
-Finally, build the root project from the project root
-```
-cd ../..             <---- only if the jar was built in the previous step
-sbt clean reload compile
-```
-
-There are three main commands:
-```
+### Step 1: Generate Graph
+### Requires Bidirectional Chain Structure. Replace the contents of `application.conf` with `sim-hs.conf` before running.
+```bash
 sbt "cli/run generate"
+```
+
+Generated files are written to `output/generated/`.
+
+## Step 2 - Enrich Graphs
+
+Attach labels / metadata to edges.
+
+```bash
 sbt "cli/run enrich"
-sbt "cli/run simulate --algorithm <hs|te> --inject <file|interactive> --duration <in seconds>
+```
+The enriched output can be seen in `output/enriched/`
+
+## Step 3 - Run the Simulator
+
+```bash
+sbt "cli/run simulate --algorithm hs --inject file --duration 60"
 ```
 
+## Sample Configuration for Tree Election
 
+### Replace the contents of `application.conf` with `sim-te.conf` before running.
 
-## Detailed Project Outline
-The project is split into 4 main parts. Mainly, `cli/`, `core/enricher`, `core/translator`, and `core/algorithms`
-
-### CLI
-This is the main entrypoint for the project. It provides subcommands to generate, enrich, simulate, and optionally, clear the output directory
+## Step 1: Generate Graph
+```bash
+sbt "cli/run generate"
 ```
-sbt "cli/run --help"
+
+Generated files are written to `output/generated/`.
+
+## Step 2 - Enrich Graphs
+
+Attach labels / metadata to edges.
+
+```bash
+sbt "cli/run enrich"
 ```
-Each subcommand has its own optional parameters that you can pass.
+The enriched output can be seen in `output/enriched/`
 
-For example, if a different config needs to be used for enriching a graph, `--config` can be used with the enrich command
+## Step 3 - Run the Simulator
+
+```bash
+sbt "cli/run simulate --algorithm te --inject interactive --duration 30"
 ```
-sbt "cli/run enrich --config path/to/config
+
+## Injection Modes
+
+## File Mode
+
+All injections are read from `input/input.json` if set.
+
+## Interactive Mode
+
+Start the simulator in interactive mode and type commands:
+
+```text
+inject <sourceNode> <message>
+exit
 ```
-More details can be found by running `--help` for each subcommand
 
-> Note: There is also a `pipeline` command that runs all the above steps sequentially. However, there may be conflicts
-> in the .conf file and it may fail fast for conflicting values
+Examples:
 
-### Enricher
-The enricher reads the generated NetGameSim file and enriches the graph by adding additional node properties like `isTimerNode`
-and `isInputNode` etc., and additional edge properties like `allowedMessages`
+```text
+inject 3 Ping
+```
 
-### Translator
-This is the driver that translates the enriched graph from a `json` file to an Akka system. It also injects any external 
-messages defined. Depending on the injection mode, it reads from `input/input.json` if it is a file driven injection, or
-through the CLI if interactive.
+```text
+inject 10 Election
+```
 
-### Algorithms
-This module implements the assigned algorithms, namely Hirschberg-Sinclair leader election in bidirectional rings and leader
-election in trees. It extends the existing implementation for `DistributedNode` defined in the course repository.
+## Metrics
 
+Cinnamon metrics are emitted to logs. These can be found in `output/cinnamon-metrics.log`
 
+## Testing
 
+Run all tests:
 
+```bash
+sbt test
+```
 
+## Reproducibility
+
+* Configuration files define graph topology and runtime parameters
+* Seeded per-node random generators are used for repeatable behavior
+* Same config + same input graph reproduces runs deterministically where applicable
+
+## Troubleshooting
+
+### Dependency Resolution Fails
+
+Ensure Java and sbt are installed and internet access is available.
+
+### Cinnamon Dependency Errors
+
+Set `AKKA_TOKEN` before running sbt.
+
+### File Not Found
+
+Verify relative paths from repository root.
