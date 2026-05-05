@@ -1,3 +1,16 @@
+val akkaToken = sys.env.getOrElse(
+  "AKKA_TOKEN",
+  "Q9TGp6a50UwiKzMmD6nDVutVwlB8RHyaWD9ha0EOnCtcx9mb"
+)
+
+ThisBuild / resolvers += "akka-secure-mvn" at s"https://repo.akka.io/${akkaToken}/secure"
+
+ThisBuild / resolvers += Resolver.url(
+  "akka-secure-ivy",
+  url(s"https://repo.akka.io/${akkaToken}/secure")
+)(Resolver.ivyStylePatterns)
+
+
 ThisBuild / scalaVersion := "3.3.4"
 
 lazy val commonDependencies = Seq(
